@@ -29,6 +29,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/jung-kurt/gofpdf"
 	"github.com/makiuchi-d/gozxing"
+	gozxingmultiqrcode "github.com/makiuchi-d/gozxing/multi/qrcode"
 	gozxingqrcode "github.com/makiuchi-d/gozxing/qrcode"
 	"github.com/posener/sharedsecret"
 	"github.com/skip2/go-qrcode"
@@ -265,14 +266,21 @@ func createDecodeTab(myWindow fyne.Window) fyne.CanvasObject {
 	recoveredSecretDisplay.Wrapping = fyne.TextWrapWord
 	recoveredSecretDisplay.MultiLine = true
 
-	// Function to add scanned share to input
-	addShareToInput := func(shareJSON string) {
+	// Function to add scanned shares to input
+	addSharesToInput := func(shareJSONs []string) {
 		currentText := shareInputEntry.Text
-		if currentText != "" && !strings.HasSuffix(currentText, "\n") {
-			currentText += "\n"
+		for _, shareJSON := range shareJSONs {
+			if currentText != "" && !strings.HasSuffix(currentText, "\n") {
+				currentText += "\n"
+			}
+			currentText += shareJSON
 		}
-		shareInputEntry.SetText(currentText + shareJSON)
-		decodeStatusLabel.SetText("QR code scanned successfully!")
+		shareInputEntry.SetText(currentText)
+		if len(shareJSONs) == 1 {
+			decodeStatusLabel.SetText("QR code scanned successfully!")
+		} else {
+			decodeStatusLabel.SetText(fmt.Sprintf("Scanned %d QR codes successfully!", len(shareJSONs)))
+		}
 	}
 
 	// Recover secret button
@@ -396,14 +404,14 @@ func createDecodeTab(myWindow fyne.Window) fyne.CanvasObject {
 				return
 			}
 
-			// Decode QR code
-			shareJSON, err := scanQRCodeFromImage(img)
+			// Decode QR codes (can be multiple)
+			shareJSONs, err := scanQRCodeFromImage(img)
 			if err != nil {
-				decodeStatusLabel.SetText(fmt.Sprintf("Error scanning QR code: %v", err))
+				decodeStatusLabel.SetText(fmt.Sprintf("Error scanning QR code(s): %v", err))
 				return
 			}
 
-			addShareToInput(shareJSON)
+			addSharesToInput(shareJSONs)
 		}, myWindow)
 	})
 
@@ -645,29 +653,48 @@ func decryptAES(ciphertext []byte, key []byte) ([]byte, error) {
 	return plaintext, nil
 }
 
-// scanQRCodeFromImage scans a QR code from an image and returns the decoded JSON string
-func scanQRCodeFromImage(img image.Image) (string, error) {
+// scanQRCodeFromImage scans QR codes from an image and returns all decoded JSON strings
+func scanQRCodeFromImage(img image.Image) ([]string, error) {
 	// Convert image to binary bitmap
 	bitmap, err := gozxing.NewBinaryBitmapFromImage(img)
 	if err != nil {
-		return "", fmt.Errorf("failed to create bitmap: %w", err)
+		return nil, fmt.Errorf("failed to create bitmap: %w", err)
 	}
 
-	// Create QR code reader
-	reader := gozxingqrcode.NewQRCodeReader()
+	// Create QR code multi-reader to detect multiple QR codes
+	multiReader := gozxingmultiqrcode.NewQRCodeMultiReader()
 
-	// Decode QR code
-	result, err := reader.Decode(bitmap, nil)
+	// Try to decode multiple QR codes
+	results, err := multiReader.DecodeMultiple(bitmap, nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to decode QR code: %w", err)
+		// If multi-reader fails, try single reader as fallback
+		singleReader := gozxingqrcode.NewQRCodeReader()
+		result, singleErr := singleReader.Decode(bitmap, nil)
+		if singleErr != nil {
+			return nil, fmt.Errorf("failed to decode QR code(s): %w", err)
+		}
+		results = []*gozxing.Result{result}
 	}
 
+	if len(results) == 0 {
+		return nil, fmt.Errorf("no QR codes found in image")
+	}
+
+	// Validate and collect valid share JSON strings
 	re := regexp.MustCompile(`^{"version"`)
-	if !re.MatchString(result.GetText()) {
-		return "", fmt.Errorf("failed to decode QR code: invalid format")
+	var validShares []string
+	for _, result := range results {
+		text := result.GetText()
+		if re.MatchString(text) {
+			validShares = append(validShares, text)
+		}
 	}
 
-	return result.GetText(), nil
+	if len(validShares) == 0 {
+		return nil, fmt.Errorf("no valid share QR codes found (found %d QR code(s) but none match expected format)", len(results))
+	}
+
+	return validShares, nil
 }
 
 // compressData compresses data using flate compression
