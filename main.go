@@ -266,20 +266,70 @@ func createDecodeTab(myWindow fyne.Window) fyne.CanvasObject {
 	recoveredSecretDisplay.Wrapping = fyne.TextWrapWord
 	recoveredSecretDisplay.MultiLine = true
 
-	// Function to add scanned shares to input
+	// Function to check if a share already exists in the input
+	shareExists := func(shareJSON string) bool {
+		currentText := shareInputEntry.Text
+		if currentText == "" {
+			return false
+		}
+
+		// Parse the new share to get its KeyShare
+		var newShare ShareData
+		if err := json.Unmarshal([]byte(shareJSON), &newShare); err != nil {
+			return false
+		}
+
+		// Parse existing shares and check for duplicates
+		existingShares, err := parseShareData(currentText)
+		if err != nil {
+			return false
+		}
+
+		for _, existingShare := range existingShares {
+			if existingShare.KeyShare == newShare.KeyShare {
+				return true
+			}
+		}
+
+		return false
+	}
+
+	// Function to add scanned shares to input (skipping duplicates)
 	addSharesToInput := func(shareJSONs []string) {
 		currentText := shareInputEntry.Text
+		var newShares []string
+		var duplicates int
+
 		for _, shareJSON := range shareJSONs {
+			if shareExists(shareJSON) {
+				duplicates++
+				continue
+			}
+			newShares = append(newShares, shareJSON)
+		}
+
+		// Add only non-duplicate shares
+		for _, shareJSON := range newShares {
 			if currentText != "" && !strings.HasSuffix(currentText, "\n") {
 				currentText += "\n"
 			}
 			currentText += shareJSON
 		}
 		shareInputEntry.SetText(currentText)
-		if len(shareJSONs) == 1 {
+
+		// Update status message
+		if len(newShares) == 0 {
+			if duplicates > 0 {
+				decodeStatusLabel.SetText(fmt.Sprintf("All %d QR code(s) were duplicates", duplicates))
+			} else {
+				decodeStatusLabel.SetText("No valid shares found")
+			}
+		} else if duplicates > 0 {
+			decodeStatusLabel.SetText(fmt.Sprintf("Added %d new share(s), skipped %d duplicate(s)", len(newShares), duplicates))
+		} else if len(newShares) == 1 {
 			decodeStatusLabel.SetText("QR code scanned successfully!")
 		} else {
-			decodeStatusLabel.SetText(fmt.Sprintf("Scanned %d QR codes successfully!", len(shareJSONs)))
+			decodeStatusLabel.SetText(fmt.Sprintf("Scanned %d QR codes successfully!", len(newShares)))
 		}
 	}
 
@@ -301,6 +351,14 @@ func createDecodeTab(myWindow fyne.Window) fyne.CanvasObject {
 
 		if len(shareDataList) == 0 {
 			decodeStatusLabel.SetText("Error: No valid shares found")
+			recoveredSecretDisplay.SetText("")
+			return
+		}
+
+		// Remove duplicate shares (based on KeyShare)
+		shareDataList = removeDuplicateShares(shareDataList)
+		if len(shareDataList) == 0 {
+			decodeStatusLabel.SetText("Error: No valid shares found after removing duplicates")
 			recoveredSecretDisplay.SetText("")
 			return
 		}
@@ -416,14 +474,14 @@ func createDecodeTab(myWindow fyne.Window) fyne.CanvasObject {
 	})
 
 	// Scan from camera button (opens file dialog for now, can be enhanced later)
-	scanCameraBtn := widget.NewButton("Scan QR from Camera", func() {
+	/* scanCameraBtn := widget.NewButton("Scan QR from Camera", func() {
 		if myWindow == nil {
 			decodeStatusLabel.SetText("Error: Window not available")
 			return
 		}
 		// For now, we'll use file selection. Camera support can be added with gocv later
 		dialog.ShowInformation("Camera Support", "Camera scanning will be available in a future update. Please use 'Scan QR from File' to select a captured image.", myWindow)
-	})
+	}) */
 
 	// Clear button
 	clearBtn := widget.NewButton("Clear", func() {
@@ -435,12 +493,12 @@ func createDecodeTab(myWindow fyne.Window) fyne.CanvasObject {
 	// Layout
 	form := container.NewVBox(
 		widget.NewLabel("Enter Shares:"),
-		widget.NewLabel("(One share per line. You can paste share strings, scan from files, or use camera)"),
+		widget.NewLabel("(One share per line. You can paste share strings or scan directly from image files)"),
 		container.NewScroll(shareInputEntry),
 		container.NewHBox(
-			recoverBtn,
 			scanFileBtn,
-			scanCameraBtn,
+			// scanCameraBtn,
+			recoverBtn,
 			clearBtn,
 		),
 		decodeStatusLabel,
@@ -481,6 +539,22 @@ func parseShareData(input string) ([]ShareData, error) {
 	}
 
 	return shareDataList, nil
+}
+
+// removeDuplicateShares removes duplicate shares based on KeyShare field
+func removeDuplicateShares(shares []ShareData) []ShareData {
+	seen := make(map[string]bool)
+	var uniqueShares []ShareData
+
+	for _, share := range shares {
+		// Use KeyShare as the unique identifier
+		if !seen[share.KeyShare] {
+			seen[share.KeyShare] = true
+			uniqueShares = append(uniqueShares, share)
+		}
+	}
+
+	return uniqueShares
 }
 
 func extractShareString(line string) string {
