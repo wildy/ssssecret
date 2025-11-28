@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"compress/flate"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/hkdf"
@@ -140,6 +141,13 @@ func createEncodeTab(myWindow fyne.Window) fyne.CanvasObject {
 			return
 		}
 
+		// Compress the plaintext before encryption
+		compressedData, err := compressData([]byte(plaintext))
+		if err != nil {
+			statusLabel.SetText(fmt.Sprintf("Error compressing secret: %v", err))
+			return
+		}
+
 		// Derive the actual encryption key from the seed using HKDF-SHA256
 		// K=HKDF-SHA256(seed=S, info="my app key", len=32 for AES-256)
 		key, err := deriveKeyFromSeed(seed, 32)
@@ -148,8 +156,8 @@ func createEncodeTab(myWindow fyne.Window) fyne.CanvasObject {
 			return
 		}
 
-		// Encrypt the plaintext using AES-256
-		encryptedData, err := encryptAES([]byte(plaintext), key)
+		// Encrypt the compressed data using AES-256
+		encryptedData, err := encryptAES(compressedData, key)
 		if err != nil {
 			statusLabel.SetText(fmt.Sprintf("Error encrypting secret: %v", err))
 			return
@@ -171,7 +179,7 @@ func createEncodeTab(myWindow fyne.Window) fyne.CanvasObject {
 			seedShareHex := hex.EncodeToString(seedShareBytes)
 
 			shareDataList[i] = ShareData{
-				Version:       "1",
+				Version:       "2",
 				KeyShare:      seedShareHex,
 				EncryptedData: base64.StdEncoding.EncodeToString(encryptedData),
 			}
@@ -291,6 +299,7 @@ func createDecodeTab(myWindow fyne.Window) fyne.CanvasObject {
 		// Extract seed shares
 		seedShares := make([]sharedsecret.Share, 0, len(shareDataList))
 		var encryptedData string
+		var version string
 		for _, sd := range shareDataList {
 			// Convert hex seed share back to bytes
 			seedShareBytes, err := hex.DecodeString(sd.KeyShare)
@@ -308,10 +317,16 @@ func createDecodeTab(myWindow fyne.Window) fyne.CanvasObject {
 				return
 			}
 			seedShares = append(seedShares, share)
-			// All shares should have the same encrypted data
+			// All shares should have the same encrypted data and version
 			if encryptedData == "" {
 				encryptedData = sd.EncryptedData
+				version = sd.Version
 			}
+		}
+
+		// Default to version 2 if version is not specified (for backward compatibility)
+		if version == "" {
+			version = "2"
 		}
 
 		// Recover the seed using sharedsecret library
@@ -336,11 +351,25 @@ func createDecodeTab(myWindow fyne.Window) fyne.CanvasObject {
 		}
 
 		// Decrypt the data
-		plaintextBytes, err := decryptAES(encryptedBytes, recoveredKey)
+		decryptedBytes, err := decryptAES(encryptedBytes, recoveredKey)
 		if err != nil {
 			decodeStatusLabel.SetText(fmt.Sprintf("Error decrypting secret: %v", err))
 			recoveredSecretDisplay.SetText("")
 			return
+		}
+
+		// Decompress the data if version is 2 or higher
+		var plaintextBytes []byte
+		if version == "2" || version == "" {
+			plaintextBytes, err = decompressData(decryptedBytes)
+			if err != nil {
+				decodeStatusLabel.SetText(fmt.Sprintf("Error decompressing secret: %v", err))
+				recoveredSecretDisplay.SetText("")
+				return
+			}
+		} else {
+			// Version 1: no compression
+			plaintextBytes = decryptedBytes
 		}
 
 		recoveredSecretDisplay.SetText(string(plaintextBytes))
@@ -633,4 +662,40 @@ func scanQRCodeFromImage(img image.Image) (string, error) {
 	}
 
 	return result.GetText(), nil
+}
+
+// compressData compresses data using flate compression
+func compressData(data []byte) ([]byte, error) {
+	var buf bytes.Buffer
+	writer, err := flate.NewWriter(&buf, flate.DefaultCompression)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create flate writer: %w", err)
+	}
+
+	_, err = writer.Write(data)
+	if err != nil {
+		writer.Close()
+		return nil, fmt.Errorf("failed to compress data: %w", err)
+	}
+
+	err = writer.Close()
+	if err != nil {
+		return nil, fmt.Errorf("failed to finalize compression: %w", err)
+	}
+
+	return buf.Bytes(), nil
+}
+
+// decompressData decompresses data using flate decompression
+func decompressData(compressedData []byte) ([]byte, error) {
+	reader := flate.NewReader(bytes.NewReader(compressedData))
+	defer reader.Close()
+
+	var buf bytes.Buffer
+	_, err := buf.ReadFrom(reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decompress data: %w", err)
+	}
+
+	return buf.Bytes(), nil
 }
