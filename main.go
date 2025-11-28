@@ -16,6 +16,7 @@ import (
 	_ "image/jpeg"
 	"io"
 	"math/big"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -659,6 +660,11 @@ func scanQRCodeFromImage(img image.Image) (string, error) {
 	result, err := reader.Decode(bitmap, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to decode QR code: %w", err)
+	}
+
+	re := regexp.MustCompile(`^{"version"`)
+	if !re.MatchString(result.GetText()) {
+		return "", fmt.Errorf("failed to decode QR code: invalid format")
 	}
 
 	return result.GetText(), nil
