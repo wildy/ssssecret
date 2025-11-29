@@ -1,6 +1,9 @@
 # Shamir Secret Sharing PDF Tool
 
+
 A Golang application using Fyne GUI that generates Shamir Secret Sharing codes from plaintext input and creates printable PDFs with QR codes for each share.
+
+**Disclaimer:** This is currently vibe-coded, and my next task (as part of trying to learn some Go) is to clean up the code.
 
 ## Features
 
