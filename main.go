@@ -20,8 +20,6 @@ import (
 	"strconv"
 	"strings"
 
-	"image/png"
-
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
@@ -40,6 +38,15 @@ type ShareData struct {
 	Version       string `json:"version"`
 	KeyShare      string `json:"key_share"`
 	EncryptedData string `json:"encrypted_data"`
+}
+
+// ShareChunk represents a chunk of a share when split across multiple QR codes
+type ShareChunk struct {
+	Version     string `json:"version"`
+	ShareIndex  int    `json:"share_index"`  // Which share this belongs to (0-based)
+	ChunkIndex  int    `json:"chunk_index"`  // Which chunk this is (0-based)
+	TotalChunks int    `json:"total_chunks"` // Total number of chunks for this share
+	Data        string `json:"data"`         // The chunk data (base64 encoded)
 }
 
 func main() {
@@ -579,6 +586,14 @@ func extractShareString(line string) string {
 	return ""
 }
 
+func generateQRCode(data string) ([]byte, error) {
+	qrImage, err := qrcode.Encode(data, qrcode.Medium, -1)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate QR code: %v", err)
+	}
+	return qrImage, nil
+}
+
 func generatePDF(shares []ShareData, threshold int, writer fyne.URIWriteCloser) error {
 	pdf := gofpdf.New("P", "mm", "A4", "")
 	pdf.SetTitle("Shamir Secret Sharing Shares", false)
@@ -608,51 +623,86 @@ func generatePDF(shares []ShareData, threshold int, writer fyne.URIWriteCloser) 
 			return fmt.Errorf("failed to marshal share data: %v", err)
 		}
 
-		// Generate QR code with key share and encrypted data
-		qrCode, err := qrcode.New(string(shareJSON), qrcode.Medium)
-		if err != nil {
-			return fmt.Errorf("failed to generate QR code: %v", err)
+		// Check if share data is too large for a single QR code (limit ~2000 chars for medium error correction)
+		const maxQRSize = 500
+		shareJSONStr := string(shareJSON)
+
+		if len(shareJSONStr) <= maxQRSize {
+			// Single QR code - use existing logic
+
+			qrImage, err := generateQRCode(shareJSONStr)
+			if err != nil {
+				return fmt.Errorf("failed to generate QR code: %v", err)
+			}
+
+			// Add new page for each share
+			pdf.AddPage()
+			pdf.SetFont("Arial", "B", 14)
+			pdf.Cell(40, 10, fmt.Sprintf("Share %d of %d", i+1, len(shares)))
+			pdf.Cell(40, 10, fmt.Sprintf("Version: %s", share.Version))
+			pdf.Ln(10)
+
+			// Add QR code image
+			imageName := fmt.Sprintf("qr_%d", i)
+			pdf.RegisterImageOptionsReader(imageName, gofpdf.ImageOptions{ImageType: "PNG"}, bytes.NewReader(qrImage))
+			pdf.ImageOptions(imageName, 60, 40, 90, 90, false, gofpdf.ImageOptions{}, 0, "")
+		} else {
+			// Split into multiple QR codes (up to 4)
+			chunks := splitShareIntoChunks(share, i, maxQRSize)
+			for chunkIdx, chunk := range chunks {
+				chunkJSON, err := json.Marshal(chunk)
+				if err != nil {
+					return fmt.Errorf("failed to marshal chunk: %v", err)
+				}
+
+				qrImage, err := generateQRCode(string(chunkJSON))
+				if err != nil {
+					return fmt.Errorf("failed to generate QR code: %v", err)
+				}
+
+				// Add new page for each chunk
+				pdf.AddPage()
+				pdf.SetFont("Arial", "B", 14)
+				pdf.Cell(40, 10, fmt.Sprintf("Share %d of %d - Part %d of %d", i+1, len(shares), chunkIdx+1, len(chunks)))
+				pdf.Cell(40, 10, fmt.Sprintf("Version: %s", share.Version))
+				pdf.Ln(10)
+
+				// Add QR code image
+				imageName := fmt.Sprintf("qr_%d_%d", i, chunkIdx)
+				pdf.RegisterImageOptionsReader(imageName, gofpdf.ImageOptions{ImageType: "PNG"}, bytes.NewReader(qrImage))
+				pdf.ImageOptions(imageName, 60, 40, 90, 90, false, gofpdf.ImageOptions{}, 0, "")
+			}
 		}
 
-		qrImage := qrCode.Image(256)
-		var buf bytes.Buffer
-		err = png.Encode(&buf, qrImage)
-		if err != nil {
-			return fmt.Errorf("failed to encode QR code: %v", err)
+		// Add share data text (only for single QR code shares)
+		if len(shareJSONStr) <= maxQRSize {
+			pdf.SetFont("Arial", "", 12)
+			pdf.SetXY(20, 140)
+			pdf.Cell(40, 10, "Key Share:")
+			pdf.Ln(8)
+			pdf.SetFont("Courier", "", 9)
+			pdf.Cell(40, 10, share.KeyShare)
+			pdf.Ln(10)
+			pdf.SetFont("Arial", "", 12)
+			pdf.Cell(40, 10, "Encrypted Data (preview):")
+			pdf.Ln(8)
+			pdf.SetFont("Courier", "", 8)
+			encPreview := share.EncryptedData
+			if len(encPreview) > 50 {
+				encPreview = encPreview[:50] + "..."
+			}
+			pdf.Cell(40, 10, encPreview)
+			pdf.Ln(15)
+			pdf.SetFont("Arial", "", 10)
+			pdf.Cell(40, 10, "Scan the QR code above to recover the secret.")
+		} else {
+			// For multi-part shares, show instructions
+			pdf.SetFont("Arial", "", 12)
+			pdf.SetXY(20, 140)
+			pdf.Cell(40, 10, "This share is split across multiple QR codes.")
+			pdf.Ln(8)
+			pdf.Cell(40, 10, "Scan all parts to reconstruct this share.")
 		}
-
-		// Add new page for each share
-		pdf.AddPage()
-		pdf.SetFont("Arial", "B", 14)
-		pdf.Cell(40, 10, fmt.Sprintf("Share %d of %d", i+1, len(shares)))
-		pdf.Cell(40, 10, fmt.Sprintf("Version: %s", share.Version))
-		pdf.Ln(10)
-
-		// Add QR code image
-		imageName := fmt.Sprintf("qr_%d", i)
-		pdf.RegisterImageOptionsReader(imageName, gofpdf.ImageOptions{ImageType: "PNG"}, &buf)
-		pdf.ImageOptions(imageName, 60, 40, 90, 90, false, gofpdf.ImageOptions{}, 0, "")
-
-		// Add share data text
-		pdf.SetFont("Arial", "", 12)
-		pdf.SetXY(20, 140)
-		pdf.Cell(40, 10, "Key Share:")
-		pdf.Ln(8)
-		pdf.SetFont("Courier", "", 9)
-		pdf.Cell(40, 10, share.KeyShare)
-		pdf.Ln(10)
-		pdf.SetFont("Arial", "", 12)
-		pdf.Cell(40, 10, "Encrypted Data (preview):")
-		pdf.Ln(8)
-		pdf.SetFont("Courier", "", 8)
-		encPreview := share.EncryptedData
-		if len(encPreview) > 50 {
-			encPreview = encPreview[:50] + "..."
-		}
-		pdf.Cell(40, 10, encPreview)
-		pdf.Ln(15)
-		pdf.SetFont("Arial", "", 10)
-		pdf.Cell(40, 10, "Scan the QR code above to recover the secret.")
 	}
 
 	// Write PDF to file
@@ -727,6 +777,56 @@ func decryptAES(ciphertext []byte, key []byte) ([]byte, error) {
 	return plaintext, nil
 }
 
+// splitShareIntoChunks splits a share into multiple chunks if it's too large for a single QR code
+// Returns up to 4 chunks
+func splitShareIntoChunks(share ShareData, shareIndex int, maxChunkSize int) []ShareChunk {
+	// Create JSON representation of the share
+	shareJSON, err := json.Marshal(share)
+	if err != nil {
+		// If marshaling fails, return empty chunks
+		return []ShareChunk{}
+	}
+
+	shareJSONStr := string(shareJSON)
+
+	// Calculate how many chunks we need (up to 4)
+	// Account for chunk metadata overhead (~100 chars for JSON structure)
+	availableSize := maxChunkSize - 100
+	dataLen := len(shareJSONStr)
+	numChunks := (dataLen + availableSize - 1) / availableSize // Ceiling division
+	if numChunks > 4 {
+		numChunks = 4
+	}
+
+	chunkSize := (dataLen + numChunks - 1) / numChunks // Divide evenly
+	chunks := make([]ShareChunk, 0, numChunks)
+
+	for i := 0; i < numChunks; i++ {
+		start := i * chunkSize
+		end := start + chunkSize
+		if end > dataLen {
+			end = dataLen
+		}
+		if start >= dataLen {
+			break
+		}
+
+		// Encode chunk data as base64 for safe transmission
+		chunkData := base64.StdEncoding.EncodeToString([]byte(shareJSONStr[start:end]))
+
+		chunk := ShareChunk{
+			Version:     "2",
+			ShareIndex:  shareIndex,
+			ChunkIndex:  i,
+			TotalChunks: numChunks,
+			Data:        chunkData,
+		}
+		chunks = append(chunks, chunk)
+	}
+
+	return chunks
+}
+
 // scanQRCodeFromImage scans QR codes from an image and returns all decoded JSON strings
 func scanQRCodeFromImage(img image.Image) ([]string, error) {
 	// Convert image to binary bitmap
@@ -739,11 +839,16 @@ func scanQRCodeFromImage(img image.Image) ([]string, error) {
 	multiReader := gozxingmultiqrcode.NewQRCodeMultiReader()
 
 	// Try to decode multiple QR codes
-	results, err := multiReader.DecodeMultiple(bitmap, nil)
+	decoderHints := map[gozxing.DecodeHintType]interface{}{
+		gozxing.DecodeHintType_TRY_HARDER:       true,
+		gozxing.DecodeHintType_POSSIBLE_FORMATS: []gozxing.BarcodeFormat{gozxing.BarcodeFormat_QR_CODE},
+	}
+
+	results, err := multiReader.DecodeMultiple(bitmap, decoderHints)
 	if err != nil {
 		// If multi-reader fails, try single reader as fallback
 		singleReader := gozxingqrcode.NewQRCodeReader()
-		result, singleErr := singleReader.Decode(bitmap, nil)
+		result, singleErr := singleReader.Decode(bitmap, decoderHints)
 		if singleErr != nil {
 			return nil, fmt.Errorf("failed to decode QR code(s): %w", err)
 		}
@@ -754,14 +859,37 @@ func scanQRCodeFromImage(img image.Image) ([]string, error) {
 		return nil, fmt.Errorf("no QR codes found in image")
 	}
 
-	// Validate and collect valid share JSON strings
-	re := regexp.MustCompile(`^{"version"`)
+	// Validate and collect valid share JSON strings or chunks
+	versionRe := regexp.MustCompile(`^{"version"`)
+	chunkRe := regexp.MustCompile(`{"share_index"`)
 	var validShares []string
+	var chunks []ShareChunk
+
 	for _, result := range results {
 		text := result.GetText()
-		if re.MatchString(text) {
+		if !versionRe.MatchString(text) {
+			continue
+		}
+
+		if chunkRe.MatchString(text) {
+			// Share chunk - parse and store
+			var chunk ShareChunk
+			if err := json.Unmarshal([]byte(text), &chunk); err == nil {
+				chunks = append(chunks, chunk)
+			}
+		} else {
+			// Regular share
 			validShares = append(validShares, text)
 		}
+	}
+
+	// Reconstruct shares from chunks
+	if len(chunks) > 0 {
+		reconstructedShares, err := reconstructSharesFromChunks(chunks)
+		if err != nil {
+			return nil, fmt.Errorf("failed to reconstruct shares from chunks: %w", err)
+		}
+		validShares = append(validShares, reconstructedShares...)
 	}
 
 	if len(validShares) == 0 {
@@ -769,6 +897,61 @@ func scanQRCodeFromImage(img image.Image) ([]string, error) {
 	}
 
 	return validShares, nil
+}
+
+// reconstructSharesFromChunks reconstructs ShareData from chunks
+func reconstructSharesFromChunks(chunks []ShareChunk) ([]string, error) {
+	// Group chunks by share index
+	shareChunks := make(map[int][]ShareChunk)
+	for _, chunk := range chunks {
+		shareChunks[chunk.ShareIndex] = append(shareChunks[chunk.ShareIndex], chunk)
+	}
+
+	var reconstructedShares []string
+
+	// Reconstruct each share
+	for _, chunksForShare := range shareChunks {
+		// Sort chunks by chunk index
+		for i := 0; i < len(chunksForShare)-1; i++ {
+			for j := i + 1; j < len(chunksForShare); j++ {
+				if chunksForShare[i].ChunkIndex > chunksForShare[j].ChunkIndex {
+					chunksForShare[i], chunksForShare[j] = chunksForShare[j], chunksForShare[i]
+				}
+			}
+		}
+
+		// Verify we have all chunks
+		if len(chunksForShare) != chunksForShare[0].TotalChunks {
+			continue // Skip incomplete shares
+		}
+
+		// Reconstruct the full data by decoding each chunk and concatenating
+		var fullData strings.Builder
+		for _, chunk := range chunksForShare {
+			// Decode chunk from base64
+			decodedChunk, err := base64.StdEncoding.DecodeString(chunk.Data)
+			if err != nil {
+				continue // Skip invalid chunk
+			}
+			fullData.Write(decodedChunk)
+		}
+
+		// Parse the reconstructed JSON as ShareData
+		var shareData ShareData
+		if err := json.Unmarshal([]byte(fullData.String()), &shareData); err != nil {
+			continue // Skip invalid JSON
+		}
+
+		// Convert back to JSON string
+		shareJSON, err := json.Marshal(shareData)
+		if err != nil {
+			continue
+		}
+
+		reconstructedShares = append(reconstructedShares, string(shareJSON))
+	}
+
+	return reconstructedShares, nil
 }
 
 // compressData compresses data using flate compression
