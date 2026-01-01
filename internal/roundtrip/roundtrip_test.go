@@ -6,8 +6,9 @@ import (
 
 	"github.com/hashicorp/vault/shamir"
 
-	"ssssecret/internal/cryptox"
-	"ssssecret/internal/qrpayload"
+	"github.com/wildy/ssssecret/internal/qrpayload"
+
+	"github.com/wildy/ssssecret/internal/cryptox"
 )
 
 func TestRoundTrip_SplitCombine_EncryptDecrypt(t *testing.T) {

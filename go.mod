@@ -1,4 +1,4 @@
-module ssssecret
+module github.com/wildy/ssssecret
 
 go 1.25.3
 

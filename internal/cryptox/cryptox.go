@@ -17,7 +17,7 @@ const (
 	NonceSize     = 12 // AES-GCM standard nonce size
 )
 
-var hkdfInfo = []byte("ssssecret aes-256 key v1")
+var hkdfInfo = []byte("github.com/wildy/ssssecret aes-256 key v1")
 
 func RandomBytes(n int) ([]byte, error) {
 	b := make([]byte, n)

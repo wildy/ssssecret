@@ -5,7 +5,7 @@ import (
 
 	fyneapp "fyne.io/fyne/v2/app"
 
-	"ssssecret/internal/appui"
+	"github.com/wildy/ssssecret/internal/appui"
 )
 
 func main() {

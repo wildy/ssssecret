@@ -9,8 +9,8 @@ import (
 
 	"github.com/hashicorp/vault/shamir"
 
-	"ssssecret/internal/cryptox"
-	"ssssecret/internal/qrpayload"
+	"github.com/wildy/ssssecret/internal/cryptox"
+	"github.com/wildy/ssssecret/internal/qrpayload"
 )
 
 type DocSummary struct {

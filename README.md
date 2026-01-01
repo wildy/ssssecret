@@ -1,4 +1,4 @@
-# ssssecret (Shamir + AES-256 + QR + PDF)
+# github.com/wildy/ssssecret (Shamir + AES-256 + QR + PDF)
 
 Desktop tool (Go + Fyne) to share a large secret on paper:
 
