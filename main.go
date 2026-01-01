@@ -5,7 +5,7 @@ import (
 
 	fyneapp "fyne.io/fyne/v2/app"
 
-	"pdf-tool-v2/internal/appui"
+	"ssssecret/internal/appui"
 )
 
 func main() {

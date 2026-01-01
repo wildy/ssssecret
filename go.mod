@@ -1,4 +1,4 @@
-module pdf-tool-v2
+module ssssecret
 
 go 1.25.3
 

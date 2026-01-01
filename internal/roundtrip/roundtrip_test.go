@@ -6,8 +6,8 @@ import (
 
 	"github.com/hashicorp/vault/shamir"
 
-	"pdf-tool-v2/internal/cryptox"
-	"pdf-tool-v2/internal/qrpayload"
+	"ssssecret/internal/cryptox"
+	"ssssecret/internal/qrpayload"
 )
 
 func TestRoundTrip_SplitCombine_EncryptDecrypt(t *testing.T) {

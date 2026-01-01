@@ -1,4 +1,4 @@
-# pdf-tool-v2 (Shamir + AES-256 + QR + PDF)
+# ssssecret (Shamir + AES-256 + QR + PDF)
 
 Desktop tool (Go + Fyne) to share a large secret on paper:
 

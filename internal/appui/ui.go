@@ -15,11 +15,11 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/hashicorp/vault/shamir"
 
-	"pdf-tool-v2/internal/cryptox"
-	"pdf-tool-v2/internal/inputscan"
-	"pdf-tool-v2/internal/pdfgen"
-	"pdf-tool-v2/internal/qrpayload"
-	"pdf-tool-v2/internal/recover"
+	"ssssecret/internal/cryptox"
+	"ssssecret/internal/inputscan"
+	"ssssecret/internal/pdfgen"
+	"ssssecret/internal/qrpayload"
+	"ssssecret/internal/recover"
 )
 
 const defaultChunkSize = 1501 // bytes of ciphertext per QR (before base64/JSON overhead)
