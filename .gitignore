@@ -1,12 +1,14 @@
 secret-sharing-tool
 secret-sharing-pdf-tool
+ssssecret
 # General
 .DS_Store
 .AppleDouble
 .LSOverride
 
 # Icon must end with two \r
-Icon
+Icon
+
 
 # Thumbnails
 ._*
@@ -38,3 +40,6 @@ Temporary Items
 
 # Built Visual Studio Code Extensions
 *.vsix
+
+# Go cache
+.cache
