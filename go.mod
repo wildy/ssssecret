@@ -5,12 +5,12 @@ go 1.25.3
 require (
 	fyne.io/fyne/v2 v2.7.1
 	github.com/hashicorp/vault v1.21.1
+	github.com/hhrutter/tiff v1.0.2
 	github.com/jung-kurt/gofpdf v1.16.2
 	github.com/makiuchi-d/gozxing v0.1.1
 	github.com/pdfcpu/pdfcpu v0.11.1
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	golang.org/x/crypto v0.46.0
-	golang.org/x/image v0.34.0
 )
 
 require (
@@ -33,7 +33,6 @@ require (
 	github.com/hack-pad/safejs v0.1.0 // indirect
 	github.com/hhrutter/lzw v1.0.0 // indirect
 	github.com/hhrutter/pkcs7 v0.2.0 // indirect
-	github.com/hhrutter/tiff v1.0.2 // indirect
 	github.com/jeandeaual/go-locale v0.0.0-20250612000132-0ef82f21eade // indirect
 	github.com/jsummers/gobmp v0.0.0-20230614200233-a9de23ed2e25 // indirect
 	github.com/mattn/go-runewidth v0.0.19 // indirect
@@ -46,6 +45,7 @@ require (
 	github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef // indirect
 	github.com/stretchr/testify v1.11.1 // indirect
 	github.com/yuin/goldmark v1.7.8 // indirect
+	golang.org/x/image v0.34.0 // indirect
 	golang.org/x/net v0.47.0 // indirect
 	golang.org/x/sys v0.39.0 // indirect
 	golang.org/x/text v0.32.0 // indirect

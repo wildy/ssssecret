@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 
 	"github.com/pdfcpu/pdfcpu/pkg/api"
 )
@@ -40,25 +39,28 @@ func ExtractPDFImages(pdfPath string) ([]image.Image, error) {
 	sort.Strings(paths)
 
 	var imgs []image.Image
+	var unsupported, failed int
+	var lastErr error
 	for _, p := range paths {
-		ext := strings.ToLower(filepath.Ext(p))
-		// Skip non-image outputs.
-		if ext == "" {
-			continue
-		}
 		if !IsImage(p) {
-			// pdfcpu may output .txt or other artifacts; ignore.
+			// pdfcpu may output formats we have no decoder for (e.g. .jpx) or
+			// non-image artifacts.
+			unsupported++
 			continue
 		}
 		img, err := DecodeImageFile(p)
 		if err != nil {
-			// Some embedded formats may not be decodable; ignore and continue.
+			failed++
+			lastErr = err
 			continue
 		}
 		imgs = append(imgs, img)
 	}
 	if len(imgs) == 0 {
-		return nil, fmt.Errorf("no decodable images found in PDF")
+		if lastErr != nil {
+			return nil, fmt.Errorf("no decodable images in PDF (%d extracted, %d unsupported format, %d failed to decode; last error: %w)", len(paths), unsupported, failed, lastErr)
+		}
+		return nil, fmt.Errorf("no decodable images in PDF (%d extracted, %d unsupported format)", len(paths), unsupported)
 	}
 	return imgs, nil
 }

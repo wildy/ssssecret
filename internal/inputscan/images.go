@@ -10,7 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	_ "golang.org/x/image/tiff"
+	// pdfcpu's tiff fork: decodes the CMYK TIFFs pdfcpu writes for CMYK
+	// image XObjects, which golang.org/x/image/tiff cannot.
+	_ "github.com/hhrutter/tiff"
 )
 
 func DecodeImageFile(path string) (image.Image, error) {
