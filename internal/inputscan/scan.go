@@ -16,15 +16,20 @@ func ScanFile(path string) ([]string, error) {
 			return nil, err
 		}
 		var out []string
+		var lastErr error
 		for _, img := range imgs {
 			txts, err := DecodeQRPayloadsFromImage(img)
 			if err != nil {
+				lastErr = err
 				continue
 			}
 			out = append(out, txts...)
 		}
 		if len(out) == 0 {
-			return nil, fmt.Errorf("no QR codes found in PDF images")
+			if lastErr != nil {
+				return nil, fmt.Errorf("no QR codes decoded from %d PDF image(s); last error: %w", len(imgs), lastErr)
+			}
+			return nil, fmt.Errorf("no QR codes decoded from %d PDF image(s)", len(imgs))
 		}
 		return out, nil
 	}

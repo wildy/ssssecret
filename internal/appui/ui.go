@@ -320,29 +320,43 @@ func buildDecryptTab(w fyne.Window) (fyne.CanvasObject, error) {
 		}
 
 		var payloads []string
+		var scanErrs []string
 		for _, p := range inputPaths {
 			txts, err := inputscan.ScanFile(p)
 			if err != nil {
-				// Keep going; user may have mixed files.
+				// Keep going; user may have mixed files. Report per-file failures below.
+				scanErrs = append(scanErrs, fmt.Sprintf("%s: %v", filepath.Base(p), err))
 				continue
 			}
 			payloads = append(payloads, txts...)
 		}
+		withScanErrs := func(err error) error {
+			if len(scanErrs) == 0 {
+				return err
+			}
+			return fmt.Errorf("%w\n\nFile(s) that could not be scanned:\n%s", err, strings.Join(scanErrs, "\n"))
+		}
+		reportSkipped := func() {
+			if len(scanErrs) > 0 {
+				dialog.ShowInformation("Some files were skipped", strings.Join(scanErrs, "\n"), w)
+			}
+		}
 		groups, err := recover.ParseAndGroup(payloads)
 		if err != nil {
-			dialog.ShowError(err, w)
+			dialog.ShowError(withScanErrs(err), w)
 			return
 		}
 		summaries := recover.Summaries(groups)
 		if len(summaries) == 1 {
 			res, err := recover.RecoverSecret(groups[summaries[0].DocID])
 			if err != nil {
-				dialog.ShowError(err, w)
+				dialog.ShowError(withScanErrs(err), w)
 				return
 			}
 			recoveredBytes = res.Secret
 			recoveredDocID = res.DocID
 			showRecovered(w, secretOut, status, res)
+			reportSkipped()
 			return
 		}
 
@@ -361,12 +375,13 @@ func buildDecryptTab(w fyne.Window) (fyne.CanvasObject, error) {
 			docID := strings.SplitN(choice, " ", 2)[0]
 			res, err := recover.RecoverSecret(groups[docID])
 			if err != nil {
-				dialog.ShowError(err, w)
+				dialog.ShowError(withScanErrs(err), w)
 				return
 			}
 			recoveredBytes = res.Secret
 			recoveredDocID = res.DocID
 			showRecovered(w, secretOut, status, res)
+			reportSkipped()
 		}, w)
 		d.Show()
 	})
