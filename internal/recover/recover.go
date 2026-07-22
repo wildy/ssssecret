@@ -119,6 +119,13 @@ func (g *Grouped) addShare(s *qrpayload.ShareV1) {
 	if err != nil {
 		return
 	}
+	// The same share may be scanned multiple times (re-taken photo, file added
+	// twice); shamir.Combine rejects duplicate parts, so keep distinct shares only.
+	for _, existing := range g.Shares {
+		if bytes.Equal(existing, b) {
+			return
+		}
+	}
 	g.Shares = append(g.Shares, b)
 	if g.N == 0 {
 		g.N = s.N
