@@ -47,5 +47,3 @@ func ScanFile(path string) ([]string, error) {
 	}
 	return txts, nil
 }
-
-

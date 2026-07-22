@@ -111,5 +111,3 @@ func TestSplitBytes_Reassemble(t *testing.T) {
 		t.Fatalf("reassembly mismatch")
 	}
 }
-
-

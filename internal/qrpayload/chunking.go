@@ -25,5 +25,3 @@ func SplitBytes(b []byte, chunkSize int) ([][]byte, error) {
 	}
 	return out, nil
 }
-
-

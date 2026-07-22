@@ -250,5 +250,3 @@ func guessChunksTotal(chunks map[int][]byte) int {
 	}
 	return max
 }
-
-

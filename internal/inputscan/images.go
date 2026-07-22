@@ -51,5 +51,3 @@ func ValidateInputPath(path string) error {
 	}
 	return nil
 }
-
-

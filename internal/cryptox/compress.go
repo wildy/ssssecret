@@ -38,5 +38,3 @@ func DecompressGzip(b []byte) ([]byte, error) {
 	}
 	return out, nil
 }
-
-

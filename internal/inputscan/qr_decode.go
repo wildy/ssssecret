@@ -74,5 +74,3 @@ func toRGBA(src image.Image) *image.RGBA {
 	draw.Draw(dst, dst.Bounds(), src, b.Min, draw.Src)
 	return dst
 }
-
-

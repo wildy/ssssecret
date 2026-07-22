@@ -79,5 +79,3 @@ func listFiles(root string) ([]string, error) {
 	})
 	return out, err
 }
-
-

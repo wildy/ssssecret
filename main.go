@@ -20,5 +20,3 @@ func main() {
 	w.SetContent(ui)
 	w.ShowAndRun()
 }
-
-

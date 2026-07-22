@@ -57,5 +57,3 @@ func TestRotate90_NonZeroOriginBounds(t *testing.T) {
 		}
 	}
 }
-
-
