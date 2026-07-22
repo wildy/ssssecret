@@ -22,7 +22,7 @@ func ExtractPDFImages(pdfPath string) ([]image.Image, error) {
 	if !IsPDF(pdfPath) {
 		return nil, fmt.Errorf("not a PDF: %s", pdfPath)
 	}
-	tmpDir, err := os.MkdirTemp("", "github.com/wildy/ssssecret-images-*")
+	tmpDir, err := os.MkdirTemp("", "ssssecret-images-*")
 	if err != nil {
 		return nil, err
 	}

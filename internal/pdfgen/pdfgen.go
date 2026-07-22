@@ -32,7 +32,7 @@ func DefaultOptions() Options {
 		MarginMM:       10,
 		GridCols:       2,
 		GridRows:       3,
-		QRPixelSize:    640,
+		QRPixelSize:    1536,
 		ErrorLevel:     qrcode.Medium,
 		TitleFontSize:  12,
 		FooterFontSize: 9,
