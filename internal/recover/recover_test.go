@@ -91,6 +91,85 @@ func TestRecoverSecret_DuplicateSharesScanned(t *testing.T) {
 	}
 }
 
+// A chunk whose salt is corrupted must not lock in nil metadata for the whole
+// group when other chunks carry valid metadata.
+func TestRecoverSecret_CorruptFirstChunkMetadata(t *testing.T) {
+	secret := []byte("corrupt-metadata regression secret")
+	docID := "CORRUPTMETA12345"
+	n, threshold := 5, 3
+
+	x, err := cryptox.GenerateX()
+	if err != nil {
+		t.Fatal(err)
+	}
+	salt, err := cryptox.RandomBytes(cryptox.SaltSizeBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := cryptox.DeriveAES256Key(x, salt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env, err := cryptox.EncryptAES256GCM(secret, key, []byte(docID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	shares, err := shamir.Split(x, n, threshold)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	half := len(env.Ciphertext) / 2
+	chunkPayload := func(idx int, data []byte, saltB64 string) string {
+		s, err := qrpayload.MarshalJSON(qrpayload.CipherChunkV1{
+			Common:     qrpayload.Common{V: qrpayload.Version, Type: qrpayload.TypeCipherChunk, Doc: docID},
+			KDF:        "HKDF-SHA256",
+			AEAD:       "AES-256-GCM",
+			N:          n,
+			T:          threshold,
+			SaltB64:    saltB64,
+			NonceB64:   qrpayload.B64(env.Nonce),
+			ChunkIndex: idx,
+			ChunkTotal: 2,
+			DataB64:    qrpayload.B64(data),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return s
+	}
+
+	payloads := []string{
+		chunkPayload(1, env.Ciphertext[:half], "!!!not-base64!!!"), // corrupt salt seen first
+		chunkPayload(2, env.Ciphertext[half:], qrpayload.B64(salt)),
+		chunkPayload(1, env.Ciphertext[:half], qrpayload.B64(salt)), // intact rescan of chunk 1
+	}
+	for _, sh := range shares[:threshold] {
+		s, err := qrpayload.MarshalJSON(qrpayload.ShareV1{
+			Common:   qrpayload.Common{V: qrpayload.Version, Type: qrpayload.TypeShare, Doc: docID},
+			N:        n,
+			T:        threshold,
+			ShareB64: qrpayload.B64(sh),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		payloads = append(payloads, s)
+	}
+
+	groups, err := ParseAndGroup(payloads)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := RecoverSecret(groups[docID])
+	if err != nil {
+		t.Fatalf("RecoverSecret: %v", err)
+	}
+	if !bytes.Equal(res.Secret, secret) {
+		t.Fatalf("recovered secret mismatch")
+	}
+}
+
 // Adding the same file twice duplicates every payload; recovery must be unaffected.
 func TestRecoverSecret_WholeDocScannedTwice(t *testing.T) {
 	secret := []byte("whole-doc duplicate regression secret")

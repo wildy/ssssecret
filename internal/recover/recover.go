@@ -91,15 +91,21 @@ func (g *Grouped) addCipher(c *qrpayload.CipherChunkV1) {
 	if g.Chunks == nil {
 		g.Chunks = map[int][]byte{}
 	}
+	// Take metadata from the first chunk whose salt and nonce decode cleanly,
+	// so one corrupt chunk cannot poison a group with valid metadata elsewhere.
 	if g.KDF == "" {
-		g.KDF = c.KDF
-		g.AEAD = c.AEAD
-		g.Comp = c.Comp
-		g.N = c.N
-		g.T = c.T
-		g.ChunksTotal = c.ChunkTotal
-		g.Salt, _ = base64.StdEncoding.DecodeString(c.SaltB64)
-		g.Nonce, _ = base64.StdEncoding.DecodeString(c.NonceB64)
+		salt, saltErr := base64.StdEncoding.DecodeString(c.SaltB64)
+		nonce, nonceErr := base64.StdEncoding.DecodeString(c.NonceB64)
+		if saltErr == nil && nonceErr == nil && len(salt) > 0 && len(nonce) > 0 {
+			g.KDF = c.KDF
+			g.AEAD = c.AEAD
+			g.Comp = c.Comp
+			g.N = c.N
+			g.T = c.T
+			g.ChunksTotal = c.ChunkTotal
+			g.Salt = salt
+			g.Nonce = nonce
+		}
 	}
 	// Always record chunk if decodes.
 	b, err := base64.StdEncoding.DecodeString(c.DataB64)
