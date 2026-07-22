@@ -64,10 +64,14 @@ go build -o ssssecret .
 go test ./internal/...
 ```
 
-Tests exist in three packages:
+Tests exist in four packages:
 - `appui/ui_test.go` — Unit tests for UI helpers (parseIntInRange, previewBytes, showRecovered, shortenPaths)
-- `inputscan/qr_decode_test.go` — QR decode from generated image
+- `inputscan/qr_decode_test.go` — QR decode from generated image, rotate90 bounds handling
+- `inputscan/tiff_decode_test.go` — CMYK TIFF decode (pdfcpu writes CMYK image XObjects as TIFF)
+- `recover/recover_test.go` — Duplicate-share dedup, corrupt-chunk metadata handling
 - `roundtrip/roundtrip_test.go` — Full encrypt/compress/split/combine/decrypt cycle
+- `roundtrip/pdf_roundtrip_test.go` — End-to-end encode → PDF → scan → recover
+- `roundtrip/qr_capacity_test.go` — Max chunk size fits a QR and decodes at default pixel size
 
 ## Architecture
 
@@ -112,6 +116,8 @@ Tests exist in three packages:
 
 - Fyne requires CGO — won't build with `CGO_ENABLED=0`
 - Shamir splitting uses hashicorp/vault/shamir which operates over GF(256); X is always 32 bytes
-- Default ciphertext chunk size: 1501 bytes
+- Default ciphertext chunk size: 1501 bytes; UI caps it at `qrpayload.MaxChunkSize` (1550) so every chunk payload fits a version-40 QR at Medium ECC (2331 bytes)
+- QR PNGs render at 1536px (`pdfgen.DefaultOptions`) — gozxing cannot decode max-density QR codes below ~1536px, so do not lower this
 - QR decode tries 4 rotations (0°, 90°, 180°, 270°) with deduplication
-- gozxing multi-reader falls back to single-reader if multi-QR detection fails
+- QR decode uses gozxing's multi-QR reader only; there is deliberately no single-reader fallback (the single reader performs worse on dense codes)
+- `os.MkdirTemp` patterns must not contain `/` — a module-rename find/replace once broke PDF scanning by inserting the module path into the temp-dir pattern
