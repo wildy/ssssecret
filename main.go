@@ -8,8 +8,10 @@ import (
 	"github.com/wildy/ssssecret/internal/appui"
 )
 
+const appId string = "ssssecret"
+
 func main() {
-	a := fyneapp.New()
+	a := fyneapp.NewWithID(appId)
 	w := a.NewWindow("Paper Secret Share (Shamir + AES-256 + QR + PDF)")
 	w.Resize(appui.DefaultWindowSize())
 
