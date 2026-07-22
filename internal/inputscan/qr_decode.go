@@ -8,7 +8,7 @@ import (
 	"github.com/makiuchi-d/gozxing/multi/qrcode"
 )
 
-// DecodeQRPayoutsFromImage returns all QR texts found in the image.
+// DecodeQRPayloadsFromImage returns all QR texts found in the image.
 // It tries multiple rotations and de-dupes results.
 func DecodeQRPayloadsFromImage(img image.Image) ([]string, error) {
 	hints := map[gozxing.DecodeHintType]interface{}{
@@ -51,7 +51,9 @@ func rotate90(src image.Image) image.Image {
 	dst := image.NewRGBA(image.Rect(0, 0, b.Dy(), b.Dx()))
 	for y := b.Min.Y; y < b.Max.Y; y++ {
 		for x := b.Min.X; x < b.Max.X; x++ {
-			dst.Set(b.Max.Y-y-1, x, src.At(x, y))
+			// Normalize to the zero-origin destination so sources with
+			// non-zero-origin bounds (e.g. SubImage crops) rotate correctly.
+			dst.Set(b.Max.Y-1-y, x-b.Min.X, src.At(x, y))
 		}
 	}
 	return dst
