@@ -399,8 +399,15 @@ func buildDecryptTab(w fyne.Window) (fyne.CanvasObject, error) {
 			if wc == nil {
 				return
 			}
-			defer wc.Close()
-			_, _ = io.Copy(wc, bytes.NewReader(recoveredBytes))
+			if _, err := io.Copy(wc, bytes.NewReader(recoveredBytes)); err != nil {
+				_ = wc.Close()
+				dialog.ShowError(fmt.Errorf("saving %s failed: %w", wc.URI().Name(), err), w)
+				return
+			}
+			if err := wc.Close(); err != nil {
+				dialog.ShowError(fmt.Errorf("saving %s failed: %w", wc.URI().Name(), err), w)
+				return
+			}
 			status.SetText(fmt.Sprintf("Saved DOC %s to %s", recoveredDocID, wc.URI().Name()))
 		}, w)
 	})
