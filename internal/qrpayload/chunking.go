@@ -2,6 +2,11 @@ package qrpayload
 
 import "fmt"
 
+// MaxChunkSize is the largest ciphertext chunk that still fits in one QR code:
+// a version-40 QR at Medium ECC holds 2331 bytes, and a chunk of C bytes costs
+// ceil(C/3)*4 base64 chars plus ~240 chars of CipherChunkV1 JSON framing.
+const MaxChunkSize = 1550
+
 // SplitBytes splits b into chunks of at most chunkSize bytes.
 func SplitBytes(b []byte, chunkSize int) ([][]byte, error) {
 	if chunkSize <= 0 {

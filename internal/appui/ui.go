@@ -120,7 +120,7 @@ func buildEncryptTab(w fyne.Window) (fyne.CanvasObject, error) {
 			dialog.ShowError(fmt.Errorf("t must be <= n"), w)
 			return
 		}
-		chunkSize, err := parseIntInRange(chunkEntry.Text, 200, 2000, "chunk size")
+		chunkSize, err := parseIntInRange(chunkEntry.Text, 200, qrpayload.MaxChunkSize, "chunk size")
 		if err != nil {
 			dialog.ShowError(err, w)
 			return
